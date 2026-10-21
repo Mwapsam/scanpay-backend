@@ -4,7 +4,7 @@ Scanpay is a Zambia-first business operating system: customers and businesses ch
 
 ## Project status (read first)
 
-- **Pre-development.** The specifications exist; the code does not. Nothing is built, tested or verified yet.
+- **Pre-development.** The specifications exist; the code is an empty Phase 0 skeleton (a `/health` API and empty crates). Nothing is built, tested or verified yet.
 - **No database changes before freeze.** Do not write migrations or create tables for a domain until that domain's design chunk has passed its freeze gate (06 §2A). As of 21 Oct 2026, no chunk is frozen.
 - **Status words mean specific things.** Proposed = recommended, awaiting approval. Open = needs a named owner's decision. Accepted = approved. Verified = proven by passing tests and independently reviewed. Never mark anything Verified because code or docs exist.
 
@@ -37,6 +37,15 @@ If two documents conflict, do not pick one silently. Point out the conflict and 
 - Mobile and tablet: React Native with Expo. Web business workspace and operations console: frameworks undecided (ADR-016).
 - Hosting: Infratel Zambia (confirmation pending).
 - Only the backend talks to MTN, SMS and KYB providers; clients never hold provider credentials.
+
+## Repository layout
+
+- `apps/api`, `apps/worker`, `apps/migrate`: the three binaries (05 §1). Keep handlers thin; logic lives in domain crates.
+- `crates/domains/<domain>`: one crate per domain (`scanpay-<domain>`). `src/domain/` is pure logic with no I/O; `src/db/` touches only that domain's schema. Each README states the chunk, its status and blocking decisions; update it when the chunk's status changes.
+- `crates/infra/<service>`: clients for external services (`mtn-momo`, `provider-sim`, `sms`, `storage`, `push`). No business rules, no tables.
+- `migrations/`: one forward-only stream, `<timestamp>_<domain>_<description>.sql`. Empty until a chunk is frozen.
+- `docs/`: the six specifications; `docs/adr/` for ADRs; `docs/providers/` for written provider confirmations; `docs/runbooks/` for operational runbooks.
+- A crate depends on another domain only through its published commands, events or contract views. Shared versions and lints live in the root `Cargo.toml`.
 
 ## Architecture rules
 

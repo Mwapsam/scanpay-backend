@@ -1,3 +1,20 @@
 ﻿[workspace]
-members = ["apps/api"]
+members = ["apps/*", "crates/domains/*", "crates/infra/*"]
 resolver = "3"
+
+[workspace.package]
+edition = "2024"
+
+[workspace.dependencies]
+axum = "0.8.9"
+dotenvy = "0.15.7"
+http-body-util = "0.1.5"
+sqlx = { version = "0.9.0", features = ["runtime-tokio", "postgres", "migrate"] }
+tokio = { version = "1.54.0", features = ["macros", "rt-multi-thread", "net"] }
+tower = { version = "0.5.3", features = ["util"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
