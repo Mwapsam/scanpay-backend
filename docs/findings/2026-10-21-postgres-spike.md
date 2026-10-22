@@ -1,0 +1,14 @@
+# PostgreSQL and SQLx spike — findings (21 Oct 2026)
+
+Observed by the throwaway spike in `spikes/postgres/` on PostgreSQL 17.11 (compose image `postgres:17`) with SQLx 0.9.0, against a disposable database. These are observations, not decisions; they feed Organization 0.4 §7.2, Workflow 0.3 §2.1/§6.0, 05 §4 and ADR-004/ADR-015.
+
+| # | Question | Observed | Consequence |
+| --- | --- | --- | --- |
+| Q1 | Scope of `set_config('app.organization_id', $1, true)` | Visible inside the transaction; after commit `current_setting('app.organization_id', true)` returns `''` (empty string), not `NULL`. Before it was ever set on the session: `NULL`. | Every RLS policy must treat both `NULL` and `''` as "no tenant", e.g. `nullif(current_setting('app.organization_id', true), '')::uuid`. A bare `::uuid` cast on `''` would raise instead of returning no rows. |
+| Q2 | RLS through an owner-privilege contract view | With FORCE RLS on the base table, and the view owned by a NOLOGIN role that is not the table owner and has no BYPASSRLS: a reader holding only SELECT on the view saw org A = 2 rows, org B = 1, no setting = 0; reading the base table directly was denied (`42501`). The table owner with FORCE RLS and no setting saw 0 rows; with org A, 2. | Matches the Organization 0.4 §7.2 design (ORG-60/61 shape). The policy filters on the session setting, not the caller's role. |
+| Q3 | `transaction_timeout` set with `SET LOCAL` mid-transaction | 0.4 s before the SET plus 0.4 s after a 600 ms timeout did not fire, so it counts from the `SET`, not `BEGIN`. When it fires: `25P04`, and the session is terminated; the next statement fails at the protocol level (EOF). | Confirms 05 §4 (observed on 17.10, now 17.11). A fired timeout is a lost connection: outcome unknown, check the command key. |
+| Q4 | SQLSTATEs as surfaced by `sqlx::Error` | `40001`, `40P01`, `57014`, `55P03`, `25P04`, `23505` all arrive unchanged via `as_database_error().code()`. A real `statement_timeout` gives `57014`. | Error classification (Organization 0.4 §3.8) can match on SQLSTATE directly. |
+| Q5 | Session killed by the server (`pg_terminate_backend`) | Next query returns `sqlx::Error::Database` with SQLSTATE `57P01`, not `Error::Io`. After a `transaction_timeout`, the following query fails with an I/O-style protocol error. | "Connection lost" must cover `57P01`, `08*` and `Error::Io` / protocol errors, not I/O alone. |
+| — | SQLx 0.9 ergonomics | Query APIs accept only `&'static str` SQL; a built string must be wrapped in `AssertSqlSafe` (with `raw_sql` for several statements). The `uuid` type needs the `uuid` feature. | Good fit for money paths: dynamic SQL becomes an explicit, greppable decision. Static queries are unaffected. |
+
+Not covered: real serialization failures and deadlocks between concurrent transactions (only their codes were checked), and MTN sandbox behaviour (DEC-27; needs MTN access).

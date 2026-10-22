@@ -26,6 +26,7 @@ This PRD defines what Scanpay must do; it is the parent of the other five rebuil
 - Payment status labels follow the approved UI (PAY-05). Issued invoices are never edited (INV-01). KYB approval no longer implies a business may collect (KYC-05).
 - PostgreSQL is self-managed by Scanpay.
 - 21 Oct 2026: consistency fixes (KYC-03 states aligned with Organization 0.4; duplicate priority note removed).
+- 21 Oct 2026: G0 and G1 are proven by the MVP, the first build slice (§6, 06 §2A).
 
 Companion documents: [Architecture Baseline 2.0](https://claude.ai/artifact/3TaqDBgNAXW9Y8P6cUW3xS) holds the technical domains and the full decision register; [Organization Draft 0.4](https://claude.ai/artifact/K1jPBwUKMcLFrJxCxbaoRF) and [Workflow Draft 0.3](https://claude.ai/artifact/7Re3AyWYUhyf6Z4fjAbE72) detail two domains; the [approved UI](https://claude.ai/artifact/1r2Uypv2kjvkZugFCGZXyk) shows every screen. Where this PRD and those documents disagree, raise it; neither silently wins.
 
@@ -359,6 +360,8 @@ The scope is full; delivery is gated by risk and dependency. Finishing a feature
 4. **G3 Merchant tools — invoicing and business operations.** Commercial invoices, catalogue and orders, point of sale and cash-up, reporting; separate ZRA path. Team roles and approvals are needed earlier, in G1.
 5. **G4 Expansion — services and advanced communications.** Selected services; voice notes, audio, video and conferences when infrastructure and cost are justified.
 6. **G5 Pilot — controlled pilot readiness.** Within the BoZ Regulatory Sandbox: application accepted, conditions mapped to controls, and monitoring, support, onboarding, recovery runbooks, privacy controls and measurable release criteria verified for the approved pilot scope.
+
+G0 and G1 are proven by the MVP, the first build slice (06 §2A); no real customer money moves before G5.
 
 The pilot scope is whatever BoZ approves within the sandbox; it may begin as early as G1 if accepted and need not include every payment method or later gate. Every included feature must be complete and supportable end to end; users are never exposed to half-built functionality.
 

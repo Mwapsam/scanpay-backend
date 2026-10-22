@@ -1,5 +1,6 @@
 ﻿[workspace]
-members = ["apps/*", "crates/domains/*", "crates/infra/*"]
+members = ["apps/*", "crates/config", "crates/types", "crates/domains/*", "crates/infra/*"]
+exclude = ["spikes"]
 resolver = "3"
 
 [workspace.package]
@@ -9,9 +10,16 @@ edition = "2024"
 axum = "0.8.9"
 dotenvy = "0.15.7"
 http-body-util = "0.1.5"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
 sqlx = { version = "0.9.0", features = ["runtime-tokio", "postgres", "migrate"] }
+thiserror = "2.0.21"
 tokio = { version = "1.54.0", features = ["macros", "rt-multi-thread", "net"] }
 tower = { version = "0.5.3", features = ["util"] }
+uuid = { version = "1.28.0", features = ["v7", "serde"] }
+
+scanpay-config = { path = "crates/config" }
+scanpay-types = { path = "crates/types" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

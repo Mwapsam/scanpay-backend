@@ -10,7 +10,7 @@ We deliver the full scope (01 §2) through six gates, starting with a discovery 
 
 *Business summary.* The plan front-loads the riskiest, most valuable work — money that is always correct — and makes every later feature earn its place by passing tests and operational checks. Leadership approves each gate on evidence, not on a calendar.
 
-**Version 1.2 (21 Oct 2026).** Adds the architecture design-and-freeze stage that now runs inside Phase 0 (§2A), updates G1–G3 to the scope in PRD 1.2, and records the 21 October decisions. Nothing in this plan authorizes code or database changes before the relevant design chunk passes its freeze gate.
+**Version 1.2 (21 Oct 2026).** Adds the architecture design-and-freeze stage that now runs inside Phase 0 (§2A), updates G1–G3 to the scope in PRD 1.2, and records the 21 October decisions. Nothing in this plan authorizes production code or database changes before the relevant design chunk passes its freeze gate. 21 Oct 2026 (later): gate 1 asks for test cases specified, not test code; adds the optional pre-freeze spike and defines the MVP as the first build slice (§2A).
 
 &#91;embedded content: delivery phases and gates · not to scale\]
 
@@ -60,11 +60,18 @@ The system is designed domain by domain in nine chunks ([Baseline 2.0](https://c
 
 Each chunk passes three gates in order (Baseline §16.2):
 
-1. **Freeze readiness:** blocking decisions signed by their owners; shared 0.7 frozen; schema, transitions and events specified and consistent; contracts reviewed by both sides; security review; acceptance tests written with scenarios and expected outcomes. Passing it authorizes migrations (reviewed by a second engineer) and code for that chunk.
+1. **Freeze readiness:** blocking decisions signed by their owners; shared 0.7 frozen; schema, transitions and events specified and consistent; contracts reviewed by both sides; security review; acceptance test cases specified: inputs, expected outcomes, and the invariant or requirement each proves, covering concurrency, idempotency, authorization, policy and failure recovery. Test code is written during the build. Passing it authorizes migrations (reviewed by a second engineer) and code for that chunk.
 2. **Implementation acceptance:** the tests pass in CI and on staging against the real implementation.
 3. **Verification:** someone other than the implementer reviews the evidence; only then is an item marked Verified.
 
-**First build slice** (needs chunks 1, 2, 4, 6 and 7 frozen, chunk 3 if it uses invoices, and the messaging record-card contract): a business requests payment from a conversation, through the MTN sandbox; pending and timeout handled correctly; outcome verified; receipt issued; ledger posted; duplicate and late answers shown harmless; unresolved payments never falsely settled. It is the first work in G0–G1.
+**Pre-freeze spike (optional).** Before any chunk is frozen, throwaway code may run against a disposable database to answer questions only a build can answer: PostgreSQL behaviour (`transaction_timeout`, row-level security through contract views), whether SQLx fits, and how the MTN sandbox behaves (DEC-27). Its schema is not the production schema and none of its code is kept; findings are recorded in the chunk draft or an ADR. A spike is not a database change under the freeze rule.
+
+**MVP: the first build slice.** A business requests payment from a conversation, through the MTN sandbox; pending and timeout handled correctly; outcome verified; receipt issued; ledger posted; duplicate and late answers shown harmless; unresolved payments never falsely settled.
+
+- **Scope:** shared (chunk 1), organization (2), the minimum of workflow (4), payments for MTN collection (6) and finance posting (7); commerce (3) only if the slice uses invoices; and the messaging record-card contract. Only these chunks pass gate 1, and only for what the slice uses. Every other chunk stays at design level.
+- **Proof:** the MVP proves G0 against the simulated provider, then G1 against the MTN sandbox. Its passing tests are the gate 2 evidence for those chunks; an independent review of that evidence is gate 3.
+- **No real customer money before G5.** That needs BoZ sandbox approval and the two-approver initiation switch (00 §8, 05 §4). Before then the MVP runs only on the simulated provider, the MTN sandbox, or a closed internal trial if the BoZ conditions allow it.
+- **Blockers to starting:** shared 0.7 frozen (CR-1 to CR-11 pending) and a full payments draft in the form of Organization 0.4.
 
 An open decision blocks only the chunks listed against it; independent chunks keep moving.
 
@@ -151,6 +158,8 @@ Every criterion names the evidence a reviewer inspects and the person who accept
 
 **G0 Foundation — deterministic integrity proof (simulated provider only)**
 
+Proven by the MVP (§2A) against the simulated provider; these reports are gate 2 evidence for the slice's chunks.
+
 | Criterion | Evidence artifact | Acceptance owner |
 | --- | --- | --- |
 | I1–I11 enforced in schema and code (00 §5) | Schema diff + passing property and concurrency test reports in CI | Engineering lead |
@@ -166,6 +175,8 @@ Every criterion names the evidence a reviewer inspects and the person who accept
 | Accounting model approved | Signed posting examples for every lifecycle step (00 §5) | Finance |
 
 **G1 Payments (MTN) — integration and release-candidate readiness (not authorization to transact; 00 §8)**
+
+Proven by the MVP (§2A) against the MTN sandbox; still no real customer money before G5.
 
 | Criterion | Evidence artifact | Acceptance owner |
 | --- | --- | --- |

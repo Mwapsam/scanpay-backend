@@ -4,8 +4,10 @@ Scanpay is a Zambia-first business operating system: customers and businesses ch
 
 ## Project status (read first)
 
-- **Pre-development.** The specifications exist; the code is an empty Phase 0 skeleton (a `/health` API and empty crates). Nothing is built, tested or verified yet.
-- **No database changes before freeze.** Do not write migrations or create tables for a domain until that domain's design chunk has passed its freeze gate (06 §2A). As of 21 Oct 2026, no chunk is frozen.
+- **Pre-development.** The specifications exist; the code is a Phase 0 skeleton: a `/health` API, validated startup config (`crates/config`), validated value types (`crates/types`: use these, don't write new money or phone types), and empty domain and infra crates. No domain logic or tables exist. Nothing is verified yet.
+- **No database changes before freeze.** Do not write production migrations or create tables for a domain until that domain's chunk has passed freeze gate 1 (06 §2A). As of 21 Oct 2026, no chunk is frozen. A throwaway spike may use a disposable database to answer PostgreSQL, SQLx or MTN-sandbox questions; its schema and code are not kept.
+- **Building starts with the MVP**, the first build slice (06 §2A): shared, organization, minimum workflow, payments (MTN collection) and finance posting. It proves G0 on the simulated provider, then G1 on the MTN sandbox. It is blocked until shared 0.7 is frozen (CR-1 to CR-11) and payments has a full draft.
+- **No real customer money before G5** (BoZ sandbox approval plus the two-approver initiation switch). Before then: simulated provider, MTN sandbox, or a closed internal trial if BoZ allows it.
 - **Status words mean specific things.** Proposed = recommended, awaiting approval. Open = needs a named owner's decision. Accepted = approved. Verified = proven by passing tests and independently reviewed. Never mark anything Verified because code or docs exist.
 
 ## Documents
@@ -43,8 +45,12 @@ If two documents conflict, do not pick one silently. Point out the conflict and 
 - `apps/api`, `apps/worker`, `apps/migrate`: the three binaries (05 §1). Keep handlers thin; logic lives in domain crates.
 - `crates/domains/<domain>`: one crate per domain (`scanpay-<domain>`). `src/domain/` is pure logic with no I/O; `src/db/` touches only that domain's schema. Each README states the chunk, its status and blocking decisions; update it when the chunk's status changes.
 - `crates/infra/<service>`: clients for external services (`mtn-momo`, `provider-sim`, `sms`, `storage`, `push`). No business rules, no tables.
+- `crates/types` (`scanpay-types`): validated value types — `Money`, `Currency`, `PhoneE164`, `IdempotencyKey`, `OrganizationId`, `new_id()`. Parse at the edge and pass these types inward; never raw strings or floats.
+- `crates/config` (`scanpay-config`): startup configuration (`DbConfig`, `Env`). Apps report every problem together and exit 1; secrets never appear in output.
+- `spikes/`: throwaway pre-freeze spikes, outside the workspace, on disposable databases. Findings go to `docs/findings/`; spike code is never reused.
 - `migrations/`: one forward-only stream, `<timestamp>_<domain>_<description>.sql`. Empty until a chunk is frozen.
-- `docs/`: the six specifications; `docs/adr/` for ADRs; `docs/providers/` for written provider confirmations; `docs/runbooks/` for operational runbooks.
+- `docs/`: the six specifications; `docs/adr/` for ADRs; `docs/providers/` for written provider confirmations; `docs/runbooks/` for operational runbooks; `docs/findings/` for spike results.
+- SQLx 0.9 accepts only `&'static str` SQL; wrapping a built string in `AssertSqlSafe` is a deliberate, reviewable exception, never a habit.
 - A crate depends on another domain only through its published commands, events or contract views. Shared versions and lints live in the root `Cargo.toml`.
 
 ## Architecture rules

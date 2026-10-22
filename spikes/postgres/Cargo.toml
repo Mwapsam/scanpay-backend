@@ -1,0 +1,14 @@
+[package]
+name = "spike-postgres"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Throwaway spike (06 §2A): its own workspace, never part of the product.
+[workspace]
+
+[dependencies]
+dotenvy = "0.15.7"
+sqlx = { version = "0.9.0", features = ["runtime-tokio", "postgres", "uuid"] }
+tokio = { version = "1.54.0", features = ["macros", "rt-multi-thread", "time"] }
+uuid = { version = "1.28.0", features = ["v4"] }

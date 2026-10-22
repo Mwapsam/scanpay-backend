@@ -1,8 +1,13 @@
-use std::env;
+mod config;
+
+use std::process::ExitCode;
 
 use axum::{Router, routing::get};
+use scanpay_config::{ConfigError, ProcessEnv, load_dotenv};
 use sqlx::postgres::PgPoolOptions;
 use tokio::net::TcpListener;
+
+use crate::config::ApiConfig;
 
 fn app() -> Router {
     Router::new().route("/health", get(health))
@@ -13,33 +18,51 @@ async fn health() -> &'static str {
 }
 
 #[tokio::main]
-async fn main() {
-    dotenvy::dotenv().ok();
+async fn main() -> ExitCode {
+    let mut errors = ConfigError::default();
+    errors.absorb(load_dotenv());
+    let config = match errors.absorb(ApiConfig::from_env(&ProcessEnv)) {
+        Some(config) if errors.is_empty() => config,
+        _ => {
+            eprint!("{errors}");
+            return ExitCode::FAILURE;
+        }
+    };
 
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env");
-
-    let pool = PgPoolOptions::new()
-        .max_connections(5)
-        .connect(&database_url)
+    let pool = match PgPoolOptions::new()
+        .max_connections(config.db.max_connections())
+        .connect_with(config.db.connect_options().clone())
         .await
-        .expect("failed to connect to PostgreSQL");
+    {
+        Ok(pool) => pool,
+        Err(err) => {
+            eprintln!("failed to connect to PostgreSQL: {err}");
+            return ExitCode::FAILURE;
+        }
+    };
 
-    sqlx::query("SELECT 1")
-        .execute(&pool)
-        .await
-        .expect("PostgreSQL connectivity check failed");
+    if let Err(err) = sqlx::query("SELECT 1").execute(&pool).await {
+        eprintln!("PostgreSQL connectivity check failed: {err}");
+        return ExitCode::FAILURE;
+    }
 
     println!("Scanpay connected to PostgreSQL successfully");
 
-    let listener = TcpListener::bind("127.0.0.1:3000")
-        .await
-        .expect("failed to bind to 127.0.0.1:3000");
+    let listener = match TcpListener::bind(config.bind_addr).await {
+        Ok(listener) => listener,
+        Err(err) => {
+            eprintln!("failed to bind to {}: {err}", config.bind_addr);
+            return ExitCode::FAILURE;
+        }
+    };
 
-    println!("Scanpay API listening on http://127.0.0.1:3000");
+    println!("Scanpay API listening on http://{}", config.bind_addr);
 
-    axum::serve(listener, app())
-        .await
-        .expect("API server failed");
+    if let Err(err) = axum::serve(listener, app()).await {
+        eprintln!("API server failed: {err}");
+        return ExitCode::FAILURE;
+    }
+    ExitCode::SUCCESS
 }
 
 #[cfg(test)]
