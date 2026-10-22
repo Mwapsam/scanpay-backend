@@ -6,6 +6,9 @@ publish = false
 
 [dependencies]
 scanpay-config.workspace = true
+scanpay-db.workspace = true
+scanpay-telemetry.workspace = true
+tracing.workspace = true
 
 [lints]
 workspace = true

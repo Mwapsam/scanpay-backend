@@ -1,5 +1,12 @@
 ﻿[workspace]
-members = ["apps/*", "crates/config", "crates/types", "crates/domains/*", "crates/infra/*"]
+members = [
+    "apps/*",
+    "crates/config",
+    "crates/telemetry",
+    "crates/types",
+    "crates/domains/*",
+    "crates/infra/*",
+]
 exclude = ["spikes"]
 resolver = "3"
 
@@ -10,16 +17,25 @@ edition = "2024"
 axum = "0.8.9"
 dotenvy = "0.15.7"
 http-body-util = "0.1.5"
+opentelemetry = { version = "0.33.1", default-features = false, features = ["trace"] }
+opentelemetry-otlp = { version = "0.33.1", default-features = false, features = ["trace", "http-proto", "reqwest-blocking-client", "reqwest-rustls"] }
+opentelemetry_sdk = { version = "0.33.1", default-features = false, features = ["trace"] }
+tracing-opentelemetry = { version = "0.34.0", default-features = false }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
-sqlx = { version = "0.9.0", features = ["runtime-tokio", "postgres", "migrate"] }
+sqlx = { version = "0.9.0", features = ["runtime-tokio", "postgres", "migrate", "macros"] }
 thiserror = "2.0.21"
-tokio = { version = "1.54.0", features = ["macros", "rt-multi-thread", "net"] }
+tokio = { version = "1.54.0", features = ["macros", "rt-multi-thread", "net", "signal"] }
 tower = { version = "0.5.3", features = ["util"] }
+tower-http = { version = "0.7.1", features = ["trace", "request-id", "util"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt", "json"] }
 url = "2.5.8"
 uuid = { version = "1.28.0", features = ["v7", "serde"] }
 
 scanpay-config = { path = "crates/config" }
+scanpay-db = { path = "crates/infra/db" }
+scanpay-telemetry = { path = "crates/telemetry" }
 scanpay-types = { path = "crates/types" }
 
 [workspace.lints.rust]
@@ -27,3 +43,6 @@ unsafe_code = "forbid"
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
+# Output goes through `tracing` (crates/telemetry), never straight to the console.
+print_stdout = "deny"
+print_stderr = "deny"

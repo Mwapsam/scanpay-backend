@@ -115,7 +115,11 @@ mod tests {
             ("  +260971234567  ", "+260971234567"),
             ("+447911123456", "+447911123456"),
         ] {
-            assert_eq!(PhoneE164::parse(input).unwrap().as_str(), expected, "{input:?}");
+            assert_eq!(
+                PhoneE164::parse(input).unwrap().as_str(),
+                expected,
+                "{input:?}"
+            );
         }
     }
 
@@ -146,7 +150,11 @@ mod tests {
             "097\t1234567",
             "097\u{a0}1234567",
         ] {
-            assert_eq!(PhoneE164::parse(bad), Err(ValidationError::InvalidPhone), "{bad:?}");
+            assert_eq!(
+                PhoneE164::parse(bad),
+                Err(ValidationError::InvalidPhone),
+                "{bad:?}"
+            );
         }
     }
 

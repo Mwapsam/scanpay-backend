@@ -1,0 +1,19 @@
+[package]
+name = "scanpay-telemetry"
+version = "0.1.0"
+edition.workspace = true
+publish = false
+
+[dependencies]
+opentelemetry.workspace = true
+opentelemetry-otlp.workspace = true
+opentelemetry_sdk.workspace = true
+scanpay-config.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+tracing.workspace = true
+tracing-opentelemetry.workspace = true
+tracing-subscriber.workspace = true
+url.workspace = true
+
+[lints]
+workspace = true

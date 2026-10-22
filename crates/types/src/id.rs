@@ -68,7 +68,9 @@ impl FromStr for OrganizationId {
 
     /// Canonical lower-case hyphenated form only (see `parse_canonical`).
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        parse_canonical(s).map(Self).ok_or(ValidationError::InvalidId)
+        parse_canonical(s)
+            .map(Self)
+            .ok_or(ValidationError::InvalidId)
     }
 }
 
@@ -162,7 +164,10 @@ mod tests {
             OrganizationId::try_from(Uuid::nil()),
             Err(ValidationError::InvalidId)
         );
-        assert!(serde_json::from_str::<OrganizationId>(r#""00000000-0000-0000-0000-000000000000""#).is_err());
+        assert!(
+            serde_json::from_str::<OrganizationId>(r#""00000000-0000-0000-0000-000000000000""#)
+                .is_err()
+        );
         let id = new_id();
         let org = OrganizationId::try_from(id).unwrap();
         assert_eq!(serde_json::to_string(&org).unwrap(), format!("\"{id}\""));
@@ -177,7 +182,11 @@ mod tests {
             "0192D3A4-5B6C-7D8E-9F01-23456789ABCD",
             "{0192d3a4-5b6c-7d8e-9f01-23456789abcd}",
         ] {
-            assert_eq!(bad.parse::<OrganizationId>(), Err(ValidationError::InvalidId), "{bad:?}");
+            assert_eq!(
+                bad.parse::<OrganizationId>(),
+                Err(ValidationError::InvalidId),
+                "{bad:?}"
+            );
         }
         assert!(
             serde_json::from_str::<OrganizationId>(r#""{0192d3a4-5b6c-7d8e-9f01-23456789abcd}""#)

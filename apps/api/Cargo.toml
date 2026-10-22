@@ -7,12 +7,16 @@ publish = false
 [dependencies]
 axum.workspace = true
 scanpay-config.workspace = true
-sqlx.workspace = true
-tokio.workspace = true
+scanpay-db.workspace = true
+scanpay-telemetry.workspace = true
+tokio = { workspace = true, features = ["sync", "time"] }
+tower.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 http-body-util.workspace = true
-tower.workspace = true
+tokio = { workspace = true, features = ["io-util"] }
 
 [lints]
 workspace = true

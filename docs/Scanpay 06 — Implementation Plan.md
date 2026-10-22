@@ -70,7 +70,7 @@ Each chunk passes three gates in order (Baseline §16.2):
 
 - **Scope:** shared (chunk 1), organization (2), the minimum of workflow (4), payments for MTN collection (6) and finance posting (7); commerce (3) only if the slice uses invoices; and the messaging record-card contract. Only these chunks pass gate 1, and only for what the slice uses. Every other chunk stays at design level.
 - **Proof:** the MVP proves G0 against the simulated provider, then G1 against the MTN sandbox. Its passing tests are the gate 2 evidence for those chunks; an independent review of that evidence is gate 3.
-- **No real customer money before G5.** That needs BoZ sandbox approval and the two-approver initiation switch (00 §8, 05 §4). Before then the MVP runs only on the simulated provider, the MTN sandbox, or a closed internal trial if the BoZ conditions allow it.
+- **No real customer money before G5.** That needs BoZ sandbox approval and the two-approver initiation switch (00 §8, 05 §4). Before then the MVP runs only on the simulated provider, the MTN sandbox, or a closed internal trial if the BoZ conditions allow it. Whether such a trial may move real money, and whose, is Open (§6); until it is decided, no trial moves real money.
 - **Blockers to starting:** shared 0.7 frozen (CR-1 to CR-11 pending) and a full payments draft in the form of Organization 0.4.
 
 An open decision blocks only the chunks listed against it; independent chunks keep moving.
@@ -333,6 +333,7 @@ No decision that affects financial correctness may still be open when the matchi
 | ZRA eligibility and certification path | Compliance + product | Before any compliance claim | Open |
 | Architecture decisions DEC-23–DEC-37, C1–C6, N1–N13 (full register: Baseline 2.0 §15) | Owners per Baseline §15.3; named individuals to be assigned by the product owner | Before the chunk each one blocks is frozen (§2A) | Open |
 | One vocabulary for payment states and refund vs reversal (N13) | Product + finance | Before chunk 6 freeze and G1 copy freeze | Open |
+| Closed internal trial before G5: whether it may move real money, whose (for example staff only), and under which BoZ condition | Product + compliance | Before any trial is planned | Open; until decided, no trial moves real money (proposed default) |
 | Approver for refunds in sole-Owner businesses (N1) | Product + security | Before chunk 4 freeze; blocks refunds for most pilot merchants | Open |
 
 ### Cross-references
