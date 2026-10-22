@@ -47,7 +47,7 @@ If two documents conflict, do not pick one silently. Point out the conflict and 
 - `crates/infra/<service>`: clients for external services (`mtn-momo`, `provider-sim`, `sms`, `storage`, `push`). No business rules, no tables.
 - `crates/types` (`scanpay-types`): validated value types — `Money`, `Currency`, `PhoneE164`, `IdempotencyKey`, `OrganizationId`, `new_id()`. Parse at the edge and pass these types inward; never raw strings or floats.
 - `crates/config` (`scanpay-config`): startup configuration (`DbConfig`, `Env`). Apps report every problem together and exit 1; secrets never appear in output.
-- `spikes/`: throwaway pre-freeze spikes, outside the workspace, on disposable databases. Findings go to `docs/findings/`; spike code is never reused.
+- `spikes/`: throwaway pre-freeze spikes, outside the workspace, on disposable databases. Findings are recorded in `docs/findings/`, then carried into the chunk draft, 05 or an ADR; only then is the spike deleted (06 §2A). Spike code is never reused. The 21 Oct postgres findings are recorded but not yet carried over.
 - `migrations/`: one forward-only stream, `<timestamp>_<domain>_<description>.sql`. Empty until a chunk is frozen.
 - `docs/`: the six specifications; `docs/adr/` for ADRs; `docs/providers/` for written provider confirmations; `docs/runbooks/` for operational runbooks; `docs/findings/` for spike results.
 - SQLx 0.9 accepts only `&'static str` SQL; wrapping a built string in `AssertSqlSafe` is a deliberate, reviewable exception, never a habit.

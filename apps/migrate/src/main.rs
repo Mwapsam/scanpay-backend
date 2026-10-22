@@ -1,14 +1,10 @@
 use std::process::ExitCode;
 
-use scanpay_config::{ConfigError, DbConfig, ProcessEnv, load_dotenv};
+use scanpay_config::DbConfig;
 
 fn main() -> ExitCode {
-    let mut errors = ConfigError::default();
-    errors.absorb(load_dotenv());
-    errors.absorb(DbConfig::from_env(&ProcessEnv));
-    if !errors.is_empty() {
-        eprint!("{errors}");
-        return ExitCode::FAILURE;
+    if let Err(code) = scanpay_config::load(DbConfig::from_env) {
+        return code;
     }
     println!("Scanpay migrate: configuration valid; no migrations yet (no chunk is frozen)");
     ExitCode::SUCCESS

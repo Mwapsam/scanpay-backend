@@ -363,7 +363,7 @@ The scope is full; delivery is gated by risk and dependency. Finishing a feature
 
 G0 and G1 are proven by the MVP, the first build slice (06 §2A); no real customer money moves before G5.
 
-The pilot scope is whatever BoZ approves within the sandbox; it may begin as early as G1 if accepted and need not include every payment method or later gate. Every included feature must be complete and supportable end to end; users are never exposed to half-built functionality.
+The pilot scope is whatever BoZ approves within the sandbox. The pilot is what G5 authorizes, so it begins only once G5 has passed for that scope; G5 may follow G1 directly (06 §1), so the pilot can start right after G1 if BoZ has accepted the application. It need not include every payment method or later gate. Every included feature must be complete and supportable end to end; users are never exposed to half-built functionality.
 
 ## 7. Business model hypotheses
 

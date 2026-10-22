@@ -10,10 +10,20 @@ pub fn new_id() -> Uuid {
     Uuid::now_v7()
 }
 
+/// Parses only the canonical text form: lower-case, hyphenated, 36
+/// characters, no surrounding whitespace, not nil. `Uuid::parse_str` alone
+/// would also accept braced, `urn:uuid:`, simple and upper-case spellings of
+/// the same value, so two different raw strings could name one key.
+fn parse_canonical(s: &str) -> Option<Uuid> {
+    let id = Uuid::try_parse(s).ok()?;
+    let canonical = id.hyphenated().to_string() == s;
+    (canonical && !id.is_nil()).then_some(id)
+}
+
 /// Tenant id. On the server it comes from the authenticated membership, never
 /// from a request body (05 §2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(try_from = "Uuid", into = "Uuid")]
+#[serde(try_from = "String", into = "String")]
 pub struct OrganizationId(Uuid);
 
 impl OrganizationId {
@@ -39,13 +49,26 @@ impl From<OrganizationId> for Uuid {
     }
 }
 
+impl TryFrom<String> for OrganizationId {
+    type Error = ValidationError;
+
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        s.parse()
+    }
+}
+
+impl From<OrganizationId> for String {
+    fn from(id: OrganizationId) -> Self {
+        id.0.to_string()
+    }
+}
+
 impl FromStr for OrganizationId {
     type Err = ValidationError;
 
+    /// Canonical lower-case hyphenated form only (see `parse_canonical`).
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Uuid::parse_str(s)
-            .map_err(|_| ValidationError::InvalidId)?
-            .try_into()
+        parse_canonical(s).map(Self).ok_or(ValidationError::InvalidId)
     }
 }
 
@@ -55,7 +78,8 @@ impl fmt::Display for OrganizationId {
     }
 }
 
-/// Client-generated `Idempotency-Key`: any non-nil UUID (05 §2).
+/// Client-generated `Idempotency-Key`: a non-nil UUID (05 §2) in its
+/// canonical lower-case hyphenated form, so one key has exactly one spelling.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct IdempotencyKey(Uuid);
@@ -70,11 +94,9 @@ impl FromStr for IdempotencyKey {
     type Err = ValidationError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let id = Uuid::parse_str(s.trim()).map_err(|_| ValidationError::InvalidIdempotencyKey)?;
-        if id.is_nil() {
-            return Err(ValidationError::InvalidIdempotencyKey);
-        }
-        Ok(Self(id))
+        parse_canonical(s)
+            .map(Self)
+            .ok_or(ValidationError::InvalidIdempotencyKey)
     }
 }
 
@@ -114,7 +136,18 @@ mod tests {
     fn idempotency_key_accepts_uuids_only() {
         let key: IdempotencyKey = "0192d3a4-5b6c-7d8e-9f01-23456789abcd".parse().unwrap();
         assert_eq!(key.to_string(), "0192d3a4-5b6c-7d8e-9f01-23456789abcd");
-        for bad in ["", "abc", "00000000-0000-0000-0000-000000000000", "0192d3a4"] {
+        for bad in [
+            "",
+            "abc",
+            "00000000-0000-0000-0000-000000000000",
+            "0192d3a4",
+            // other spellings of a valid key are refused
+            "0192D3A4-5B6C-7D8E-9F01-23456789ABCD",
+            "{0192d3a4-5b6c-7d8e-9f01-23456789abcd}",
+            "urn:uuid:0192d3a4-5b6c-7d8e-9f01-23456789abcd",
+            "0192d3a45b6c7d8e9f0123456789abcd",
+            " 0192d3a4-5b6c-7d8e-9f01-23456789abcd",
+        ] {
             assert_eq!(
                 bad.parse::<IdempotencyKey>(),
                 Err(ValidationError::InvalidIdempotencyKey),
@@ -133,5 +166,22 @@ mod tests {
         let id = new_id();
         let org = OrganizationId::try_from(id).unwrap();
         assert_eq!(serde_json::to_string(&org).unwrap(), format!("\"{id}\""));
+    }
+
+    #[test]
+    fn organization_id_text_matches_idempotency_key_rules() {
+        let text = "0192d3a4-5b6c-7d8e-9f01-23456789abcd";
+        assert!(text.parse::<OrganizationId>().is_ok());
+        for bad in [
+            " 0192d3a4-5b6c-7d8e-9f01-23456789abcd",
+            "0192D3A4-5B6C-7D8E-9F01-23456789ABCD",
+            "{0192d3a4-5b6c-7d8e-9f01-23456789abcd}",
+        ] {
+            assert_eq!(bad.parse::<OrganizationId>(), Err(ValidationError::InvalidId), "{bad:?}");
+        }
+        assert!(
+            serde_json::from_str::<OrganizationId>(r#""{0192d3a4-5b6c-7d8e-9f01-23456789abcd}""#)
+                .is_err()
+        );
     }
 }

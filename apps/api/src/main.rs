@@ -3,8 +3,6 @@ mod config;
 use std::process::ExitCode;
 
 use axum::{Router, routing::get};
-use scanpay_config::{ConfigError, ProcessEnv, load_dotenv};
-use sqlx::postgres::PgPoolOptions;
 use tokio::net::TcpListener;
 
 use crate::config::ApiConfig;
@@ -19,21 +17,14 @@ async fn health() -> &'static str {
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    let mut errors = ConfigError::default();
-    errors.absorb(load_dotenv());
-    let config = match errors.absorb(ApiConfig::from_env(&ProcessEnv)) {
-        Some(config) if errors.is_empty() => config,
-        _ => {
-            eprint!("{errors}");
-            return ExitCode::FAILURE;
-        }
+    let config = match scanpay_config::load(ApiConfig::from_env) {
+        Ok(config) => config,
+        Err(code) => return code,
     };
+    let bind_addr = config.bind_addr;
 
-    let pool = match PgPoolOptions::new()
-        .max_connections(config.db.max_connections())
-        .connect_with(config.db.connect_options().clone())
-        .await
-    {
+    let (pool_options, connect_options) = config.db.into_pool_parts();
+    let pool = match pool_options.connect_with(connect_options).await {
         Ok(pool) => pool,
         Err(err) => {
             eprintln!("failed to connect to PostgreSQL: {err}");
@@ -48,15 +39,15 @@ async fn main() -> ExitCode {
 
     println!("Scanpay connected to PostgreSQL successfully");
 
-    let listener = match TcpListener::bind(config.bind_addr).await {
+    let listener = match TcpListener::bind(bind_addr).await {
         Ok(listener) => listener,
         Err(err) => {
-            eprintln!("failed to bind to {}: {err}", config.bind_addr);
+            eprintln!("failed to bind to {bind_addr}: {err}");
             return ExitCode::FAILURE;
         }
     };
 
-    println!("Scanpay API listening on http://{}", config.bind_addr);
+    println!("Scanpay API listening on http://{bind_addr}");
 
     if let Err(err) = axum::serve(listener, app()).await {
         eprintln!("API server failed: {err}");

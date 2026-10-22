@@ -26,6 +26,15 @@ async fn main() -> Res<()> {
     dotenvy::from_path(concat!(env!("CARGO_MANIFEST_DIR"), "/../../.env")).ok();
     let admin_url = std::env::var("DATABASE_URL")?;
     let admin_opts = PgConnectOptions::from_str(&admin_url)?;
+    // It creates and force-drops databases and cluster-wide roles: refuse
+    // anything but a server on this machine (the local compose cluster).
+    let host = admin_opts.get_host();
+    if !matches!(host, "127.0.0.1" | "localhost" | "::1" | "[::1]") {
+        return Err(format!(
+            "refusing to run: DATABASE_URL host is {host:?}; this spike only runs against a local disposable cluster"
+        )
+        .into());
+    }
 
     let tag = Uuid::new_v4().simple().to_string()[..8].to_owned();
     let db = format!("scanpay_spike_{tag}");

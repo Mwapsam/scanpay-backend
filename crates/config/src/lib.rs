@@ -4,15 +4,21 @@
 //! is fixed in one pass. Secrets (the database password, `.env` contents)
 //! never appear in `Debug` output or error messages.
 
-use std::{borrow::Borrow, collections::HashMap, env::VarError, fmt, hash::Hash, str::FromStr};
+use std::{
+    borrow::Borrow, collections::HashMap, env::VarError, fmt, hash::Hash, process::ExitCode,
+    str::FromStr,
+};
 
-use sqlx::postgres::PgConnectOptions;
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 
 /// Where configuration values come from. Tests use a `HashMap`.
 pub trait Env {
     /// `Ok(None)` when `key` is unset or empty; `Err` when it is set but
     /// unusable (for example not valid UTF-8), so it is never mistaken for unset.
     fn var(&self, key: &str) -> Result<Option<String>, ConfigError>;
+
+    /// Whether `key` is present at all, even with an empty value.
+    fn is_set(&self, key: &str) -> bool;
 }
 
 /// The process environment (after [`load_dotenv`], if used).
@@ -28,6 +34,10 @@ impl Env for ProcessEnv {
             }
         }
     }
+
+    fn is_set(&self, key: &str) -> bool {
+        std::env::var_os(key).is_some()
+    }
 }
 
 impl<K, V> Env for HashMap<K, V>
@@ -37,6 +47,25 @@ where
 {
     fn var(&self, key: &str) -> Result<Option<String>, ConfigError> {
         Ok(self.get(key).and_then(|v| non_empty(v.as_ref().to_owned())))
+    }
+
+    fn is_set(&self, key: &str) -> bool {
+        self.contains_key(key)
+    }
+}
+
+/// The startup rule in one place: load `.env`, build the configuration from
+/// the process environment, and on any problem print every one of them and
+/// hand back the exit code the binary should return.
+pub fn load<T>(build: impl FnOnce(&ProcessEnv) -> Result<T, ConfigError>) -> Result<T, ExitCode> {
+    let mut errors = ConfigError::default();
+    errors.absorb(load_dotenv());
+    match errors.absorb(build(&ProcessEnv)) {
+        Some(value) if errors.is_empty() => Ok(value),
+        _ => {
+            eprint!("{errors}");
+            Err(ExitCode::FAILURE)
+        }
     }
 }
 
@@ -129,10 +158,12 @@ const DEFAULT_MAX_CONNECTIONS: u32 = 5;
 const MAX_CONNECTIONS_RANGE: std::ops::RangeInclusive<u32> = 1..=100;
 
 /// libpq variables that sqlx's URL parser silently uses as defaults for
-/// anything the URL leaves out (sqlx-postgres `PgConnectOptions::new_without_pgpass`).
-/// Scanpay takes connection settings only from `DATABASE_URL`, so any of these
-/// being set is refused rather than quietly merged in.
-const LIBPQ_VARS: [&str; 12] = [
+/// anything the URL leaves out (sqlx-postgres `PgConnectOptions::new_without_pgpass`
+/// and `apply_pgpass`). Scanpay takes connection settings only from
+/// `DATABASE_URL`, so any of these being present, even empty, is refused
+/// rather than quietly merged in.
+const LIBPQ_VARS: [&str; 13] = [
+    "PGPASSFILE",
     "PGHOST",
     "PGHOSTADDR",
     "PGPORT",
@@ -155,9 +186,15 @@ pub struct DbConfig {
 }
 
 impl DbConfig {
-    /// Reads `DATABASE_URL` (required, `postgres://` or `postgresql://`) and
-    /// `DATABASE_MAX_CONNECTIONS` (optional, 1–100, default 5), and refuses
-    /// any libpq `PG*` variable (see [`LIBPQ_VARS`]).
+    /// Reads `DATABASE_URL` and `DATABASE_MAX_CONNECTIONS` (optional, 1–100,
+    /// default 5), and refuses any libpq `PG*` variable (see [`LIBPQ_VARS`]).
+    ///
+    /// `DATABASE_URL` must be `postgres://user:password@host[:port]/database`
+    /// with every one of user, password, host and database written in it, so
+    /// sqlx never fills a gap from the OS user name, the server's default
+    /// database or a password file. Query parameters that would override
+    /// those parts (`?user=`, `?dbname=`, …) are refused; others such as
+    /// `?sslmode=` are allowed.
     ///
     /// Note for tests: the check covers the `Env` given, but sqlx's parser
     /// reads `PG*` from the real process environment regardless, so a test
@@ -167,11 +204,10 @@ impl DbConfig {
         let mut errors = ConfigError::default();
 
         for key in LIBPQ_VARS {
-            match env.var(key) {
-                Ok(None) => {}
-                Ok(Some(_)) | Err(_) => errors.push(format!(
+            if env.is_set(key) {
+                errors.push(format!(
                     "{key} is set; unset it, connection settings come only from DATABASE_URL"
-                )),
+                ));
             }
         }
 
@@ -184,20 +220,13 @@ impl DbConfig {
                 errors.push("DATABASE_URL is required");
                 None
             }
-            Ok(Some(url)) => {
-                let url = url.trim();
-                let scheme_ok = url.starts_with("postgres://") || url.starts_with("postgresql://");
-                // The parser's own message is not shown: it could echo the URL.
-                match PgConnectOptions::from_str(url) {
-                    Ok(options) if scheme_ok => Some(options),
-                    _ => {
-                        errors.push(
-                            "DATABASE_URL must be a postgres:// or postgresql:// connection URL",
-                        );
-                        None
-                    }
+            Ok(Some(url)) => match check_database_url(url.trim()) {
+                Ok(options) => Some(options),
+                Err(problem) => {
+                    errors.push(problem);
+                    None
                 }
-            }
+            },
         };
 
         let max_connections = errors
@@ -234,6 +263,50 @@ impl DbConfig {
     pub fn max_connections(&self) -> u32 {
         self.max_connections
     }
+
+    /// Pool settings and connection options, ready for
+    /// `pool_options.connect_with(connect_options)`. Pool setup lives here
+    /// so every binary builds its pool the same way.
+    pub fn into_pool_parts(self) -> (PgPoolOptions, PgConnectOptions) {
+        (
+            PgPoolOptions::new().max_connections(self.max_connections),
+            self.connect_options,
+        )
+    }
+}
+
+/// Requires every connection setting to be written in the URL itself.
+/// Messages never include the URL or any part of it.
+fn check_database_url(raw: &str) -> Result<PgConnectOptions, &'static str> {
+    const SHAPE: &str =
+        "DATABASE_URL must be postgres://user:password@host[:port]/database";
+    let url = url::Url::parse(raw).map_err(|_| SHAPE)?;
+    if !matches!(url.scheme(), "postgres" | "postgresql") {
+        return Err(SHAPE);
+    }
+    if url.host_str().is_none_or(str::is_empty) {
+        return Err("DATABASE_URL must name the host");
+    }
+    if url.username().is_empty() {
+        return Err("DATABASE_URL must name the user");
+    }
+    if url.password().is_none_or(str::is_empty) {
+        return Err("DATABASE_URL must include the password");
+    }
+    if url.path().trim_start_matches('/').is_empty() {
+        return Err("DATABASE_URL must name the database");
+    }
+    // sqlx applies these query parameters after the parts above, so they
+    // would silently override them.
+    if url.query_pairs().any(|(key, _)| {
+        matches!(&*key, "user" | "password" | "dbname" | "host" | "hostaddr" | "port")
+    }) {
+        return Err(
+            "DATABASE_URL must not set user, password, dbname, host, hostaddr or port as query parameters",
+        );
+    }
+    // The parser's own message is not shown: it could echo the URL.
+    PgConnectOptions::from_str(raw).map_err(|_| SHAPE)
 }
 
 impl fmt::Debug for DbConfig {
@@ -303,6 +376,43 @@ mod tests {
     }
 
     #[test]
+    fn refuses_libpq_variables_even_when_empty() {
+        let err = DbConfig::from_env(&env(&[
+            ("DATABASE_URL", URL),
+            ("PGPASSWORD", ""),
+            ("PGAPPNAME", " "),
+            ("PGPASSFILE", "/tmp/pass"),
+        ]))
+        .unwrap_err();
+        assert_eq!(err.problems().len(), 3);
+        assert!(err.problems()[0].starts_with("PGPASSFILE"));
+    }
+
+    #[test]
+    fn url_must_spell_out_every_part() {
+        for (url, problem) in [
+            ("postgres://127.0.0.1:5432", "DATABASE_URL must name the user"),
+            ("postgres://scanpay@127.0.0.1/scanpay", "DATABASE_URL must include the password"),
+            ("postgres://scanpay:@127.0.0.1/scanpay", "DATABASE_URL must include the password"),
+            ("postgres://scanpay:pw@127.0.0.1", "DATABASE_URL must name the database"),
+            ("postgres://scanpay:pw@127.0.0.1/", "DATABASE_URL must name the database"),
+            (
+                "postgres://scanpay:pw@127.0.0.1/scanpay?user=other",
+                "DATABASE_URL must not set user, password, dbname, host, hostaddr or port as query parameters",
+            ),
+            (
+                "postgres://scanpay:pw@127.0.0.1/scanpay?dbname=other",
+                "DATABASE_URL must not set user, password, dbname, host, hostaddr or port as query parameters",
+            ),
+        ] {
+            let err = DbConfig::from_env(&env(&[("DATABASE_URL", url)])).unwrap_err();
+            assert_eq!(err.problems(), [problem], "{url}");
+        }
+        let ok = "postgres://scanpay:pw@db.internal:6432/scanpay?sslmode=verify-full";
+        assert!(DbConfig::from_env(&env(&[("DATABASE_URL", ok)])).is_ok());
+    }
+
+    #[test]
     fn unusable_value_is_not_treated_as_unset() {
         struct BadUnicode;
         impl Env for BadUnicode {
@@ -314,6 +424,9 @@ mod tests {
                     }
                     _ => Ok(None),
                 }
+            }
+            fn is_set(&self, key: &str) -> bool {
+                matches!(key, "DATABASE_URL" | "DATABASE_MAX_CONNECTIONS")
             }
         }
         let err = DbConfig::from_env(&BadUnicode).unwrap_err();
@@ -334,6 +447,18 @@ mod tests {
 
         let err = DbConfig::from_env(&env(&[("DATABASE_MAX_CONNECTIONS", "lots")])).unwrap_err();
         assert_eq!(err.problems().len(), 2);
+    }
+
+    #[test]
+    fn pool_parts_carry_the_settings() {
+        let config = DbConfig::from_env(&env(&[
+            ("DATABASE_URL", URL),
+            ("DATABASE_MAX_CONNECTIONS", "7"),
+        ]))
+        .unwrap();
+        let (pool, connect) = config.into_pool_parts();
+        assert_eq!(pool.get_max_connections(), 7);
+        assert_eq!(connect.get_database(), Some("scanpay"));
     }
 
     #[test]

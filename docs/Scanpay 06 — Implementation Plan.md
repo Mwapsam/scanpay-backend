@@ -64,7 +64,7 @@ Each chunk passes three gates in order (Baseline §16.2):
 2. **Implementation acceptance:** the tests pass in CI and on staging against the real implementation.
 3. **Verification:** someone other than the implementer reviews the evidence; only then is an item marked Verified.
 
-**Pre-freeze spike (optional).** Before any chunk is frozen, throwaway code may run against a disposable database to answer questions only a build can answer: PostgreSQL behaviour (`transaction_timeout`, row-level security through contract views), whether SQLx fits, and how the MTN sandbox behaves (DEC-27). Its schema is not the production schema and none of its code is kept; findings are recorded in the chunk draft or an ADR. A spike is not a database change under the freeze rule.
+**Pre-freeze spike (optional).** Before any chunk is frozen, throwaway code may run against a disposable database to answer questions only a build can answer: PostgreSQL behaviour (`transaction_timeout`, row-level security through contract views), whether SQLx fits, and how the MTN sandbox behaves (DEC-27). Its schema is not the production schema and none of its code is kept. Its findings are first recorded as observed in `docs/findings/`, then carried into the chunk draft, 05 or an ADR; only after that is the spike deleted. A spike is not a database change under the freeze rule.
 
 **MVP: the first build slice.** A business requests payment from a conversation, through the MTN sandbox; pending and timeout handled correctly; outcome verified; receipt issued; ledger posted; duplicate and late answers shown harmless; unresolved payments never falsely settled.
 
